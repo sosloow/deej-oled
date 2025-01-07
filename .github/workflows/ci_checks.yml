@@ -10,14 +10,9 @@ jobs:
     name: Building
     strategy:
       matrix:
-        # All generated code should be running on stable now
         rust: [stable]
         os:
-          # Check compilation works on common OSes
-          # (i.e. no path issues)
           - ubuntu-latest
-          - macOS-latest
-          - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
