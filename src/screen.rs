@@ -65,7 +65,7 @@ pub async fn render_task(screen: ScreenResources) {
         NEXT_FRAME.signal(frame);
         frame = READY_FRAME.wait().await;
 
-        match display.flush_frame(&frame).await {
+        match display.flush_frame(frame).await {
             Ok(_) => (),
             Err(_e) => (),
         }
