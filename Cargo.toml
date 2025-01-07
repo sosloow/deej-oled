@@ -5,6 +5,9 @@ version = "0.1.0"
 license = "MIT"
 
 [dependencies]
+embassy-sync = { version = "0.6.1", git = "https://github.com/embassy-rs/embassy.git", rev = "cefdbfa", features = [
+    "defmt",
+] }
 cortex-m = { version = "0.7.7", features = ["inline-asm"] }
 cortex-m-rt = "0.7"
 defmt = "0.3.10"
@@ -29,6 +32,23 @@ embassy-time = { version = "0.4.0", git = "https://github.com/embassy-rs/embassy
     "defmt",
     "defmt-timestamp-uptime",
 ] }
+embassy-usb = { version = "0.3.0", git = "https://github.com/embassy-rs/embassy.git", rev = "cefdbfa", features = [
+    "defmt",
+] }
+embassy-usb-logger = { version = "0.2.0", git = "https://github.com/embassy-rs/embassy.git", rev = "cefdbfa" }
+embassy-futures = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy.git", rev = "cefdbfa" }
+log = "0.4.22"
+adc-mcp3008 = { version = "0.1.1", git = "https://github.com/thecodechemist99/adc-mcp3008" }
+fugit = "0.3.7"
+display-interface-spi = "0.5.0"
+embedded-graphics = "0.8.1"
+ssd1322_rs = "0.2.0"
+assign-resources = "0.4.1"
+heapless = "0.8.0"
+embedded-hal-bus = { version = "0.1.0", features = ["async"] }
+portable-atomic = { version = "1.5", features = ["critical-section"] }
+critical-section = "1.2.0"
+static_cell = { version = "2.1.0", features = ["nightly"] }
 
 [profile.release]
 debug = 2
