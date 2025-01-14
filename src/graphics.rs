@@ -1,36 +1,40 @@
 use embassy_time::{Duration, Ticker};
-use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::Gray4;
 use embedded_graphics::prelude::*;
-use embedded_graphics::text::{Alignment, Text};
-use heapless::String;
 
+const FRAME_DELAY: u64 = 20;
+
+use crate::animation_node::AnimationNode;
 use crate::screen;
 
 #[embassy_executor::task]
 pub async fn prepare_frame_task() {
-    let mut ticker = Ticker::every(Duration::from_millis(15));
+    let image_data = include_bytes!(sprite_location);
 
-    let mut counter: u32 = 0;
+    let bmp: Bmp<Gray4> = Bmp::from_slice(data).unwrap();
 
-    let style = MonoTextStyle::new(
-        &embedded_graphics::mono_font::iso_8859_1::FONT_10X20,
-        Gray4::WHITE,
+    let image = Image::new(&bmp, self.coords);
+
+    let mut animation_root = AnimationNode::new(
+        Point::new(83, 0),
+        Point::new(87, 10),
+        Point::new(screen::SCREEN_WIDTH as i32, screen::SCREEN_HEIGHT as i32),
+        Point::new(1, 2),
+        100,
+        "sprites/parts/outline.bmp",
     );
+
+    let mut ticker = Ticker::every(Duration::from_millis(FRAME_DELAY));
 
     loop {
         let frame = screen::NEXT_FRAME.wait().await;
         frame.clear(Gray4::BLACK).unwrap();
 
-        let mut buffer: String<32> = String::try_from("Hello from\nthe SSD1322\n").unwrap();
-        let c: String<8> = counter.try_into().unwrap();
-        buffer.push_str(c.as_str()).unwrap();
-        Text::with_alignment(&buffer, Point::new(128, 12), style, Alignment::Center)
-            .draw(frame)
-            .unwrap();
+        animation_root.update();
+
+        animation_root.draw(frame).unwrap();
 
         screen::READY_FRAME.signal(frame);
-        counter += 1;
 
         ticker.next().await;
     }

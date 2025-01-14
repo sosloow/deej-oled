@@ -9,6 +9,7 @@ use embassy_rp::{bind_interrupts, peripherals};
 use {defmt_rtt as _, panic_probe as _};
 
 mod adc;
+mod animation_node;
 mod graphics;
 mod screen;
 

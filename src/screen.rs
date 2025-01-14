@@ -9,8 +9,8 @@ use static_cell::StaticCell;
 
 use super::ScreenResources;
 
-const SCREEN_WIDTH: usize = 256;
-const SCREEN_HEIGHT: usize = 64;
+pub const SCREEN_WIDTH: usize = 256;
+pub const SCREEN_HEIGHT: usize = 64;
 const BUF_SIZE: usize = calculate_buffer_size(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 static FRAME_A: StaticCell<Frame<BUF_SIZE>> = StaticCell::new();
