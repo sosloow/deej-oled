@@ -1,8 +1,23 @@
-use adc_mcp3008::{self, Mcp3008};
+use adc_mcp3008::{self, Channels8, Mcp3008};
+use core::sync::atomic::{AtomicU32, Ordering};
 use embassy_rp::{gpio, peripherals, spi};
 use embassy_time::Timer;
 
 use crate::AdcResources;
+
+// Static shared state accessible from anywhere
+pub static ADC_VALUES: [AtomicU32; 8] = [
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+    AtomicU32::new(0),
+];
+
+pub static ADC_CHANNELS: [Channels8; 1] = [Channels8::CH0];
 
 pub struct AdcMcp<'d> {
     adc: Mcp3008<spi::Spi<'d, peripherals::SPI1, spi::Async>, gpio::Output<'d>>,
@@ -35,13 +50,25 @@ pub async fn adc_task(adc: AdcResources) {
     let mut adc_mcp = AdcMcp::new(adc);
 
     loop {
-        let r = adc_mcp
-            .adc
-            .read_channel(adc_mcp3008::Channels8::CH0)
-            .unwrap();
-        let r1 = r as u32;
-        log::info!("{:?}", r1);
+        // Read all channels in a loop
+        for (i, channel) in ADC_CHANNELS.iter().enumerate() {
+            if let Ok(value) = adc_mcp.adc.read_channel(*channel) {
+                ADC_VALUES[i].store(value as u32, Ordering::Relaxed);
+            } else {
+                log::warn!("Failed to read channel {}", i);
+            }
+        }
+
+        log::info!("{}", ADC_VALUES[0].load(Ordering::Relaxed));
 
         Timer::after_millis(200).await;
+    }
+}
+
+pub fn read_adc_value(channel: usize) -> u32 {
+    if channel < 8 {
+        ADC_VALUES[channel].load(Ordering::Relaxed)
+    } else {
+        0
     }
 }
