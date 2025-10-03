@@ -12,9 +12,9 @@ use embedded_alloc::LlffHeap as Heap;
 use {defmt_rtt as _, panic_probe as _};
 
 mod adc;
-mod animation_node;
-mod filtered_bmp;
 mod graphics;
+mod gray4;
+mod gray4_effects;
 mod screen;
 mod volume_indicator;
 
@@ -23,27 +23,32 @@ static HEAP: Heap = Heap::empty();
 
 assign_resources! {
     screen: ScreenResources {
-        spi: SPI0,
-        sck: PIN_2,
-        mosi: PIN_3,
-        miso: PIN_16,
-        cs: PIN_4,
-        reset: PIN_6,
-        pwr: PIN_9,
-        dc: PIN_5,
-        dma_tx: DMA_CH0,
-    },
-    adc: AdcResources {
+        // spi: SPI0,
+        // sck: PIN_2,
+        // mosi: PIN_3,
+        // miso: PIN_16,
+        // cs: PIN_4,
         spi: SPI1,
         sck: PIN_14,
         mosi: PIN_15,
         miso: PIN_12,
         cs: PIN_13,
-        // spi: SPI0,
-        // sck: PIN_2,
-        // mosi: PIN_3,
-        // miso: PIN_4,
-        // cs: PIN_5,
+        reset: PIN_6,
+        pwr: PIN_9,
+        dc: PIN_16,
+        dma_tx: DMA_CH0,
+    },
+    adc: AdcResources {
+        // spi: SPI1,
+        // sck: PIN_14,
+        // mosi: PIN_15,
+        // miso: PIN_12,
+        // cs: PIN_13,
+        spi: SPI0,
+        sck: PIN_2,
+        mosi: PIN_7,
+        miso: PIN_4,
+        cs: PIN_5,
         dma_tx: DMA_CH1,
         dma_rx: DMA_CH2,
     },

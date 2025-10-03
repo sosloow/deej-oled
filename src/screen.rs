@@ -3,6 +3,7 @@ use embassy_rp::spi;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::signal::Signal;
 use embassy_time::Delay;
+// use embedded_graphics::pixelcolor::Gray4;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use ssd1322_rs::{self, calculate_buffer_size, Frame, Orientation, SSD1322};
 use static_cell::StaticCell;
@@ -55,7 +56,7 @@ pub async fn render_task(screen: ScreenResources) {
     );
     display.init_default(&mut Delay).await.unwrap();
     display
-        .set_orientation(Orientation::Inverted)
+        .set_orientation(Orientation::Standard)
         .await
         .unwrap();
 
