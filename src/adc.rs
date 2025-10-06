@@ -1,9 +1,9 @@
 use adc_mcp3008::{self, Channels8, Mcp3008};
-use core::cmp::{max, min};
 use core::fmt::Write as _;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicI8, AtomicU32, Ordering};
 use embassy_rp::{gpio, peripherals, spi};
 use embassy_time::Timer;
+use embassy_time::{Duration, Instant};
 use heapless::String;
 
 use crate::AdcResources;
@@ -14,6 +14,17 @@ pub struct AdcChanCfg {
     pub min: u16,
     pub max: u16,
     pub chan: Channels8,
+    pub target: AdcTarget,
+}
+
+#[derive(Clone, Copy)]
+pub enum AdcTarget {
+    System,
+    Mic,
+    Browser,
+    Steam,
+    Discord,
+    Spotify,
 }
 
 pub const NOISE_THRESHOLD: u32 = 15;
@@ -23,35 +34,42 @@ pub const ADC_CHANNELS: [AdcChanCfg; 5] = [
         invert: true,
         min: 0,
         max: 850,
-        chan: Channels8::CH0,
+        chan: Channels8::CH1,
+        target: AdcTarget::Spotify,
     },
     AdcChanCfg {
         invert: true,
         min: 0,
         max: 1023,
         chan: Channels8::CH1,
+        target: AdcTarget::Mic,
     },
     AdcChanCfg {
         invert: true,
         min: 0,
         max: 1023,
         chan: Channels8::CH2,
+        target: AdcTarget::Browser,
     },
     AdcChanCfg {
         invert: true,
         min: 0,
         max: 1023,
         chan: Channels8::CH3,
+        target: AdcTarget::Steam,
     },
     AdcChanCfg {
         invert: true,
         min: 0,
         max: 1023,
         chan: Channels8::CH4,
+        target: AdcTarget::Discord,
     },
 ];
 
-// Static shared state accessible from anywhere
+pub const ACTIVE_CHANNEL_TTL: u32 = 1000;
+pub static ACTIVE_CHANNEL: AtomicI8 = AtomicI8::new(-1);
+
 pub static ADC_VALUES: [AtomicU32; 5] = [
     AtomicU32::new(0),
     AtomicU32::new(0),
@@ -90,6 +108,9 @@ impl<'d> AdcMcp<'d> {
 pub async fn adc_task(adc: AdcResources) {
     let mut adc_mcp = AdcMcp::new(adc);
 
+    let mut active_deadline = Instant::now();
+    ACTIVE_CHANNEL.store(-1, Ordering::Relaxed);
+
     loop {
         let mut snapshot: [u32; ADC_VALUES.len()] = [0; ADC_VALUES.len()];
         for (i, s) in snapshot.iter_mut().enumerate() {
@@ -97,21 +118,37 @@ pub async fn adc_task(adc: AdcResources) {
         }
 
         let mut any_updated = false;
+        let mut best_idx: Option<usize> = None;
+        let mut best_diff: u32 = 0;
 
         for (i, conf) in ADC_CHANNELS.iter().enumerate() {
             if let Ok(raw) = adc_mcp.adc.read_channel(conf.chan) {
                 let norm = normalize_value(raw, *conf);
                 let curr = snapshot[i];
-                let diff = max(curr, norm) - min(curr, norm);
+                let diff = core::cmp::max(curr, norm) - core::cmp::min(curr, norm);
 
                 if diff >= NOISE_THRESHOLD {
                     ADC_VALUES[i].store(norm, Ordering::Relaxed);
                     snapshot[i] = norm;
                     any_updated = true;
+
+                    if diff > best_diff {
+                        best_diff = diff;
+                        best_idx = Some(i);
+                    }
                 }
             } else {
                 log::warn!("Failed to read channel {}", i);
             }
+        }
+
+        let now = Instant::now();
+
+        if let Some(idx) = best_idx {
+            set_active_channel(Some(idx));
+            active_deadline = now + Duration::from_millis(ACTIVE_CHANNEL_TTL as u64);
+        } else if now >= active_deadline {
+            set_active_channel(None);
         }
 
         if any_updated {
@@ -158,5 +195,24 @@ pub fn read_adc_value(channel: usize) -> u32 {
         ADC_VALUES[channel].load(Ordering::Relaxed)
     } else {
         0
+    }
+}
+
+fn set_active_channel(channel: Option<usize>) {
+    let idx = match channel {
+        Some(c) if c < ADC_CHANNELS.len() => c as i8,
+        _ => -1,
+    };
+
+    ACTIVE_CHANNEL.store(idx, Ordering::Relaxed);
+}
+
+pub fn get_active_channel() -> Option<usize> {
+    let active_channel = ACTIVE_CHANNEL.load(Ordering::Relaxed);
+
+    if active_channel >= 0 {
+        Some(active_channel as usize)
+    } else {
+        None
     }
 }

@@ -16,6 +16,7 @@ mod graphics;
 mod gray4;
 mod gray4_effects;
 mod screen;
+mod sprite;
 mod volume_indicator;
 
 #[global_allocator]
@@ -23,11 +24,6 @@ static HEAP: Heap = Heap::empty();
 
 assign_resources! {
     screen: ScreenResources {
-        // spi: SPI0,
-        // sck: PIN_2,
-        // mosi: PIN_3,
-        // miso: PIN_16,
-        // cs: PIN_4,
         spi: SPI1,
         sck: PIN_14,
         mosi: PIN_15,
@@ -39,11 +35,6 @@ assign_resources! {
         dma_tx: DMA_CH0,
     },
     adc: AdcResources {
-        // spi: SPI1,
-        // sck: PIN_14,
-        // mosi: PIN_15,
-        // miso: PIN_12,
-        // cs: PIN_13,
         spi: SPI0,
         sck: PIN_2,
         mosi: PIN_7,

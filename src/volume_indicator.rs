@@ -1,15 +1,17 @@
-use core::fmt::Write;
-// use embedded_graphics::image::Image;
 use embedded_graphics::image::{Image, ImageRawLE};
 use embedded_graphics::pixelcolor::Gray4;
 use embedded_graphics::prelude::*;
-use heapless::String;
 
-use crate::adc::read_adc_value;
+use crate::adc::AdcTarget;
 use crate::gray4;
 use crate::gray4_effects::fill_bottom_to_top;
 
-static VOLUME_ICON: &[u8] = include_bytes!("sprites/logos/steam-62.gray4");
+static VOLUME_ICON_STEAM: &[u8] = include_bytes!("sprites/logos/steam-62.gray4");
+static VOLUME_ICON_MIC: &[u8] = include_bytes!("sprites/logos/mic-62.gray4");
+static VOLUME_ICON_DISCORD: &[u8] = include_bytes!("sprites/logos/discord-62.gray4");
+static VOLUME_ICON_BROWSER: &[u8] = include_bytes!("sprites/logos/browser-62.gray4");
+static VOLUME_ICON_SPOTIFY: &[u8] = include_bytes!("sprites/logos/spotify-62.gray4");
+
 const W: usize = 62;
 const H: usize = 62;
 const BYTES: usize = gray4::size_bytes(W, H);
@@ -29,27 +31,28 @@ impl VolumeIndicator {
         }
     }
 
-    pub fn draw<D>(&mut self, display: &mut D)
+    pub fn draw<D>(&mut self, display: &mut D, adc_value: u16, adc_target: AdcTarget)
     where
         D: DrawTarget<Color = Gray4>,
     {
-        let adc_value = read_adc_value(0);
-        let mut adc_value_string: String<16> = String::new();
-        write!(adc_value_string, "{}", adc_value).unwrap();
+        // let mut adc_value_string: String<16> = String::new();
+        // write!(adc_value_string, "{}", adc_value).unwrap();
 
-        // let style = MonoTextStyle::new(&FONT_9X15_BOLD, DEFAULT_BRIGHTNESS);
-        // Text::new(&adc_value_string, self.coords, style)
-        //     .draw(display)
-        //     .ok();
-
-        let adc = read_adc_value(1) as u16;
+        let volume_icon = match adc_target {
+            AdcTarget::System => VOLUME_ICON_MIC,
+            AdcTarget::Mic => VOLUME_ICON_MIC,
+            AdcTarget::Browser => VOLUME_ICON_BROWSER,
+            AdcTarget::Steam => VOLUME_ICON_STEAM,
+            AdcTarget::Discord => VOLUME_ICON_DISCORD,
+            AdcTarget::Spotify => VOLUME_ICON_SPOTIFY,
+        };
 
         fill_bottom_to_top(
             &mut self.out_buf,
-            VOLUME_ICON,
+            volume_icon,
             W,
             H,
-            adc,
+            adc_value,
             1,
             3,
             &mut self.scratch_row,
