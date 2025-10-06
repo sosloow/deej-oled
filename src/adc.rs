@@ -24,7 +24,7 @@ pub enum AdcTarget {
     Browser,
     Steam,
     Discord,
-    Spotify,
+    // Spotify,
 }
 
 pub const NOISE_THRESHOLD: u32 = 15;
@@ -35,7 +35,7 @@ pub const ADC_CHANNELS: [AdcChanCfg; 5] = [
         min: 0,
         max: 850,
         chan: Channels8::CH1,
-        target: AdcTarget::Spotify,
+        target: AdcTarget::System,
     },
     AdcChanCfg {
         invert: true,

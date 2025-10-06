@@ -1,39 +1,45 @@
-use crate::gray4::{self, MUL4};
+use crate::gray4::{self, Gray4Img, Gray4ImgMut, MUL4};
 
-/// Compose bottom→top fill into `dst_packed` from `src_packed`.
-/// Uses a single `scratch_row` (nibbles) to avoid extra allocations.
+pub struct FillParams {
+    pub empty_b: u8,
+    pub full_b: u8,
+}
+
 pub fn fill_bottom_to_top(
-    dst_packed: &mut [u8],
-    src_packed: &[u8],
-    width: usize,
-    height: usize,
-    fill_0_1023: u16,       // ADC 0..=1023
-    empty_b: u8,            // Gray4 0..=15
-    full_b: u8,             // Gray4 0..=15
-    scratch_row: &mut [u8], // len >= width (nibbles 0..=15)
+    dst: &mut Gray4ImgMut,
+    src: &Gray4Img,
+    fill_0_1023: u16,
+    p: FillParams,
+    scratch_row: &mut [u8],
 ) {
-    let rb = gray4::row_bytes(width);
-    let eb = empty_b.min(15) as usize;
-    let fb = full_b.min(15) as usize;
+    debug_assert_eq!(dst.w, src.w);
+    debug_assert_eq!(dst.h, src.h);
+    debug_assert!(scratch_row.len() >= src.w);
 
-    let filled_rows = ((height as u32 * fill_0_1023 as u32) + 511) / 1023;
+    let w = dst.w;
+    let h = dst.h;
 
-    for y in 0..height {
-        let srow = &src_packed[y * rb..(y + 1) * rb];
-        let drow = &mut dst_packed[y * rb..(y + 1) * rb];
+    let eb = p.empty_b.min(15) as usize;
+    let fb = p.full_b.min(15) as usize;
 
-        gray4::unpack_row_4_to_nibbles(srow, scratch_row, width);
+    let filled_rows = ((h as u32 * fill_0_1023 as u32) + 511) / 1023;
 
-        let b = if (y as u32) >= (height as u32).saturating_sub(filled_rows) {
+    for y in 0..h {
+        let srow = src.row(y);
+        let drow = dst.row_mut(y);
+
+        gray4::unpack_row_4_to_nibbles(srow, scratch_row, w);
+
+        let b = if (y as u32) >= (h as u32).saturating_sub(filled_rows) {
             fb
         } else {
             eb
         };
-        for px in &mut scratch_row[..width] {
+        for px in &mut scratch_row[..w] {
             let v = (*px & 0x0F) as usize;
             *px = MUL4[b][v];
         }
 
-        gray4::pack_row_nibbles_to_4(&scratch_row[..width], drow, width);
+        gray4::pack_row_nibbles_to_4(&scratch_row[..w], drow, w)
     }
 }

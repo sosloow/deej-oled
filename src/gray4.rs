@@ -35,11 +35,11 @@ pub fn unpack_row_4_to_8(src4: &[u8], dst8: &mut [u8], width: usize) {
     let mut x = 0usize;
     for &b in src4.iter().take(row_bytes(width)) {
         if x < width {
-            dst8[x] = ((b & 0x0F) * 17) as u8;
+            dst8[x] = (b & 0x0F) * 17;
             x += 1;
         }
         if x < width {
-            dst8[x] = (((b >> 4) & 0x0F) * 17) as u8;
+            dst8[x] = ((b >> 4) & 0x0F) * 17;
             x += 1;
         }
     }
@@ -94,6 +94,31 @@ pub fn pack_row_nibbles_to_4(nibbles: &[u8], dst_row: &mut [u8], width: usize) {
     }
     if x < width {
         dst_row[di] = nibbles[x] & 0x0F;
+    }
+}
+
+pub struct Gray4Img<'a> {
+    pub bytes: &'a [u8],
+    pub w: usize,
+    pub h: usize,
+}
+pub struct Gray4ImgMut<'a> {
+    pub bytes: &'a mut [u8],
+    pub w: usize,
+    pub h: usize,
+}
+
+impl Gray4Img<'_> {
+    #[inline]
+    pub fn row(&self, y: usize) -> &[u8] {
+        &self.bytes[y * row_bytes(self.w)..(y + 1) * row_bytes(self.w)]
+    }
+}
+impl Gray4ImgMut<'_> {
+    #[inline]
+    pub fn row_mut(&mut self, y: usize) -> &mut [u8] {
+        let rb = row_bytes(self.w);
+        &mut self.bytes[y * rb..(y + 1) * rb]
     }
 }
 
@@ -195,13 +220,13 @@ impl<'a> PackedRows<'a> {
         &self.data[y * rb..(y + 1) * rb]
     }
 }
-impl<'a> Deref for Gray4ViewMut<'a> {
+impl Deref for Gray4ViewMut<'_> {
     type Target = [u8];
     fn deref(&self) -> &Self::Target {
         self.data
     }
 }
-impl<'a> DerefMut for Gray4ViewMut<'a> {
+impl DerefMut for Gray4ViewMut<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.data
     }

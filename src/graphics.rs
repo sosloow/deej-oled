@@ -47,7 +47,7 @@ pub async fn prepare_frame_task() {
             let adc = adc::read_adc_value(idx) as u16;
 
             active_channel_screen.draw(frame);
-            indicator.draw(frame, adc, adc::ADC_CHANNELS[idx as usize].target);
+            indicator.draw(frame, adc, adc::ADC_CHANNELS[idx].target);
         } else {
             standby_screen.draw(frame);
         }

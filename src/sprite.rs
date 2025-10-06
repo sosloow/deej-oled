@@ -14,7 +14,7 @@ pub fn frame_count(sheet: &[u8], w: u32, h: u32) -> usize {
 }
 
 #[inline]
-fn frame_slice<'a>(sheet: &'a [u8], w: u32, h: u32, idx: usize) -> &'a [u8] {
+fn frame_slice(sheet: &[u8], w: u32, h: u32, idx: usize) -> &[u8] {
     let fsz = row_bytes(w) * h as usize;
     let start = idx * fsz;
     &sheet[start..start + fsz]
