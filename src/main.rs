@@ -1,14 +1,12 @@
 #![no_std]
 #![no_main]
 
-extern crate alloc;
-
 use assign_resources::assign_resources;
 use embassy_executor::Spawner;
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::{Driver, InterruptHandler};
+use embassy_rp::Peri;
 use embassy_rp::{bind_interrupts, peripherals};
-use embedded_alloc::LlffHeap as Heap;
 use {defmt_rtt as _, panic_probe as _};
 
 mod adc;
@@ -18,9 +16,6 @@ mod gray4_effects;
 mod screen;
 mod sprite;
 mod volume_indicator;
-
-#[global_allocator]
-static HEAP: Heap = Heap::empty();
 
 assign_resources! {
     screen: ScreenResources {
@@ -56,23 +51,16 @@ async fn logger_task(driver: Driver<'static, USB>) {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    {
-        use core::mem::MaybeUninit;
-        const HEAP_SIZE: usize = 1024;
-        static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-        unsafe { HEAP.init(&raw mut HEAP_MEM as usize, HEAP_SIZE) }
-    }
-
     let p = embassy_rp::init(Default::default());
 
     let r = split_resources!(p);
 
     let driver = Driver::new(p.USB, Irqs);
-    spawner.must_spawn(logger_task(driver));
+    spawner.spawn(logger_task(driver).unwrap());
 
-    spawner.must_spawn(adc::adc_task(r.adc));
+    spawner.spawn(adc::adc_task(r.adc).unwrap());
 
     screen::init_display_buffers();
-    spawner.must_spawn(screen::render_task(r.screen));
-    spawner.must_spawn(graphics::prepare_frame_task());
+    spawner.spawn(screen::render_task(r.screen).unwrap());
+    spawner.spawn(graphics::prepare_frame_task().unwrap());
 }
