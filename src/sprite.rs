@@ -2,20 +2,17 @@ use embedded_graphics::image::{Image, ImageRawLE};
 use embedded_graphics::pixelcolor::Gray4;
 use embedded_graphics::prelude::*;
 
-#[inline]
-const fn row_bytes(w: u32) -> usize {
-    (w as usize + 1) / 2
-}
+use crate::gray4::row_bytes;
 
 #[inline]
 pub fn frame_count(sheet: &[u8], w: u32, h: u32) -> usize {
-    let fsz = row_bytes(w) * h as usize;
+    let fsz = row_bytes(w as usize) * h as usize;
     sheet.len() / fsz
 }
 
 #[inline]
 fn frame_slice(sheet: &[u8], w: u32, h: u32, idx: usize) -> &[u8] {
-    let fsz = row_bytes(w) * h as usize;
+    let fsz = row_bytes(w as usize) * h as usize;
     let start = idx * fsz;
     &sheet[start..start + fsz]
 }

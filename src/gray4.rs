@@ -9,7 +9,7 @@ pub const fn size_bytes(width: usize, height: usize) -> usize {
 
 #[inline]
 pub const fn row_bytes(width: usize) -> usize {
-    (width + 1) / 2
+    width.div_ceil(2)
 }
 
 pub fn pack_row_8_to_4(src8: &[u8], dst4: &mut [u8], width: usize) {
@@ -159,7 +159,7 @@ impl<'a> Gray4ViewMut<'a> {
         }
     }
     #[inline]
-    pub fn as_ro(&self) -> Gray4View {
+    pub fn as_ro(&self) -> Gray4View<'_> {
         Gray4View {
             data: self.data,
             w: self.w,
