@@ -1,9 +1,11 @@
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use embassy_time::{Duration, Timer};
 use embedded_graphics::pixelcolor::Gray4;
 use embedded_graphics::prelude::*;
 
-use crate::sprite::{draw_sheet_frame_masked, frame_count};
+use crate::sprite::{
+    draw_sheet_frame_flash, draw_sheet_frame_masked, draw_sheet_frame_masked_crt, frame_count,
+};
 use crate::volume_indicator::VolumeIndicator;
 use crate::{adc, screen};
 
@@ -23,6 +25,8 @@ const COBWEB_W: u32 = 40;
 const COBWEB_H: u32 = 40;
 const COBWEB_COUNT: usize = 4;
 
+const HALO_STEPS: u8 = 3;
+
 #[derive(PartialEq, Eq)]
 pub enum ScreenState {
     INTRO = 0,
@@ -33,6 +37,7 @@ pub enum ScreenState {
 }
 
 pub static SCREEN_STATE: AtomicU8 = AtomicU8::new(ScreenState::OFF as u8);
+pub static ACTIVE_INPUT: AtomicBool = AtomicBool::new(false);
 
 pub fn get_screen_state() -> ScreenState {
     match SCREEN_STATE.load(Ordering::Relaxed) {
@@ -98,7 +103,7 @@ pub async fn prepare_frame_task() {
                 intro_screen.draw(frame);
 
                 if intro_screen.firework_time {
-                    background.start_fireworks_from(Point::new(108, 45));
+                    background.start_intro_halo(Point::new(108, 20));
                 }
             }
             ScreenState::STANDBY => {
@@ -143,12 +148,18 @@ impl Cobweb {
         }
     }
 }
+enum BackgroundMode {
+    Inactive,
+    IntroHalo { step: u8 },
+    Normal,
+}
 
 pub struct Background {
     sprite: &'static [u8],
     sprite_w: u32,
     sprite_h: u32,
     frame_total: usize,
+    mode: BackgroundMode,
 
     screen_width: i32,
     screen_height: i32,
@@ -156,7 +167,6 @@ pub struct Background {
     cobwebs: [Cobweb; COBWEB_COUNT],
 
     rng_state: u32,
-    is_active: bool,
 
     frame_skip: u8,
     frame_counter: u8,
@@ -189,9 +199,9 @@ impl Background {
             screen_height,
             cobwebs,
             rng_state: 0x1234_5678,
-            is_active: false,
             frame_skip: 4,
             frame_counter: 0,
+            mode: BackgroundMode::Inactive,
         }
     }
 
@@ -199,44 +209,85 @@ impl Background {
     where
         D: DrawTarget<Color = Gray4>,
     {
-        if !self.is_active {
-            return;
-        }
+        match self.mode {
+            BackgroundMode::Inactive => {}
 
-        self.frame_counter = (self.frame_counter + 1) % self.frame_skip;
+            BackgroundMode::IntroHalo { ref mut step } => {
+                for (_i, web) in self.cobwebs.iter_mut().enumerate() {
+                    let _ = draw_sheet_frame_flash(
+                        display,
+                        self.sprite,
+                        self.sprite_w,
+                        self.sprite_h,
+                        web.frame,
+                        web.pos,
+                        *step,
+                        HALO_STEPS,
+                    );
+                }
 
-        let mut to_respawn: [bool; COBWEB_COUNT] = [false; COBWEB_COUNT];
+                *step = step.saturating_add(1);
 
-        for i in 0..COBWEB_COUNT {
-            let web = &mut self.cobwebs[i];
+                if get_screen_state() != ScreenState::INTRO {
+                    for i in 0..COBWEB_COUNT {
+                        let r_speed = self.next_rand();
+                        let r_drift = self.next_rand();
 
-            let _ = draw_sheet_frame_masked(
-                display,
-                self.sprite,
-                self.sprite_w,
-                self.sprite_h,
-                web.frame,
-                web.pos,
-            );
+                        let speed_y = 2 + (r_speed % 4) as i32;
 
-            if self.frame_counter > 0 && web.is_respawned {
-                continue;
+                        let drift_table = [-2, 0, 2];
+                        let dx = drift_table[(r_drift % 3) as usize];
+
+                        let web = &mut self.cobwebs[i];
+                        web.pos = web.pos;
+                        web.vel = Point::new(dx, speed_y);
+                    }
+                    self.mode = BackgroundMode::Normal;
+                } else if *step > HALO_STEPS {
+                    for (_i, web) in self.cobwebs.iter_mut().enumerate() {
+                        web.frame = (web.frame + 1) % self.frame_total;
+                    }
+                }
             }
 
-            web.frame = (web.frame + 1) % self.frame_total;
-            web.pos += web.vel;
+            BackgroundMode::Normal => {
+                // your existing falling logic, with frame_skip etc
+                self.frame_counter = (self.frame_counter + 1) % self.frame_skip;
 
-            if web.pos.y > self.screen_height + self.sprite_h as i32
-                || web.pos.x > self.screen_width + self.sprite_w as i32
-                || web.pos.x < -(self.sprite_w as i32)
-            {
-                to_respawn[i] = true;
-            }
-        }
+                let mut to_respawn: [bool; COBWEB_COUNT] = [false; COBWEB_COUNT];
 
-        for i in 0..COBWEB_COUNT {
-            if to_respawn[i] {
-                self.respawn_at_top(i);
+                for i in 0..COBWEB_COUNT {
+                    let web = &mut self.cobwebs[i];
+
+                    let _ = draw_sheet_frame_masked(
+                        display,
+                        self.sprite,
+                        self.sprite_w,
+                        self.sprite_h,
+                        web.frame,
+                        web.pos,
+                    );
+
+                    if self.frame_counter > 0 && web.is_respawned {
+                        continue;
+                    }
+
+                    web.frame = (web.frame + 1) % self.frame_total;
+                    web.pos += web.vel;
+
+                    if web.pos.y > self.screen_height + self.sprite_h as i32
+                        || web.pos.x > self.screen_width + self.sprite_w as i32
+                        || web.pos.x < -(self.sprite_w as i32)
+                    {
+                        to_respawn[i] = true;
+                    }
+                }
+
+                for i in 0..COBWEB_COUNT {
+                    if to_respawn[i] {
+                        self.respawn_at_top(i);
+                    }
+                }
             }
         }
     }
@@ -279,21 +330,24 @@ impl Background {
         self.rng_state
     }
 
-    pub fn start_fireworks_from(&mut self, origin: Point) {
-        let speeds = [
-            Point::new(-6, -4),
-            Point::new(-8, -2),
-            Point::new(8, -2),
-            Point::new(6, -4),
+    pub fn start_intro_halo(&mut self, origin: Point) {
+        // Four positions around Muffet; tweak offsets to taste
+        let offsets = [
+            Point::new(-90, -15), // left-up
+            Point::new(90, -15),  // right-up
+            Point::new(-60, 15),  // left-down
+            Point::new(60, 15),   // right-down
         ];
 
-        for (web, vel) in self.cobwebs.iter_mut().zip(speeds.iter()) {
+        for (i, web) in self.cobwebs.iter_mut().enumerate() {
+            let idx = i % offsets.len();
+            web.pos = origin + offsets[idx];
+            web.vel = Point::new(0, 0); // no movement during halo
+            web.frame = i % self.frame_total;
             web.is_respawned = false;
-            web.pos = origin + (*vel * 4);
-            web.vel = *vel;
-            web.frame = 0;
         }
-        self.is_active = true;
+
+        self.mode = BackgroundMode::IntroHalo { step: 0 };
     }
 }
 
@@ -322,7 +376,7 @@ impl IntroScreen {
             frame: 0,
             frame_total: frame_count(sprite, sprite_w, sprite_h),
             intro_frame: 0,
-            intro_frame_total: 30,
+            intro_frame_total: 26,
             firework_frame: 8,
             firework_time: false,
         }
@@ -429,6 +483,7 @@ struct ActiveChannelScreen {
     sprite_h: u32,
     frame: usize,
     frame_total: usize,
+    frame_global: u8,
 }
 
 impl ActiveChannelScreen {
@@ -440,6 +495,7 @@ impl ActiveChannelScreen {
             sprite_h,
             frame: 0,
             frame_total: frame_count(sprite, sprite_w, sprite_h),
+            frame_global: 0,
         }
     }
 
@@ -447,14 +503,17 @@ impl ActiveChannelScreen {
     where
         D: DrawTarget<Color = Gray4>,
     {
-        let _ = draw_sheet_frame_masked(
+        let _ = draw_sheet_frame_masked_crt(
             display,
             self.sprite,
             self.sprite_w,
             self.sprite_h,
             self.frame,
             self.coords,
+            self.frame_global,
+            ACTIVE_INPUT.load(Ordering::Relaxed),
         );
+        self.frame_global = self.frame_global.wrapping_add(1);
 
         self.frame = (self.frame + 1) % self.frame_total;
     }

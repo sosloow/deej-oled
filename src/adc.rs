@@ -4,6 +4,7 @@ use embassy_rp::{gpio, peripherals, spi};
 use embassy_time::Timer;
 use embassy_time::{Duration, Instant};
 
+use crate::graphics::{get_screen_state, ScreenState, ACTIVE_INPUT, SCREEN_STATE};
 use crate::{deej_usb, AdcResources};
 
 #[derive(Clone, Copy)]
@@ -21,8 +22,8 @@ pub enum AdcTarget {
     Mic,
     Browser,
     Steam,
-    Discord,
-    // Spotify,
+    // Discord,
+    Spotify,
 }
 
 pub const NOISE_THRESHOLD: u32 = 15;
@@ -61,7 +62,7 @@ pub const ADC_CHANNELS: [AdcChanCfg; 5] = [
         min: 0,
         max: 1023,
         chan: Channels8::CH4,
-        target: AdcTarget::Discord,
+        target: AdcTarget::Spotify,
     },
 ];
 
@@ -147,8 +148,17 @@ pub async fn adc_task(adc: AdcResources) {
         if let Some(idx) = best_idx {
             set_active_channel(Some(idx));
             active_deadline = now + Duration::from_millis(ACTIVE_CHANNEL_TTL as u64);
+
+            ACTIVE_INPUT.store(true, Ordering::Relaxed);
+            SCREEN_STATE.store(ScreenState::ACTIVE as u8, Ordering::Relaxed);
         } else if now >= active_deadline {
             set_active_channel(None);
+
+            if get_screen_state() == ScreenState::ACTIVE {
+                SCREEN_STATE.store(ScreenState::STANDBY as u8, Ordering::Relaxed);
+            }
+        } else {
+            ACTIVE_INPUT.store(false, Ordering::Relaxed);
         }
 
         if any_updated || ADC_FORCE_PUSH.load(Ordering::Relaxed) {
