@@ -5,6 +5,29 @@ pub struct FillParams {
     pub full_b: u8,
 }
 
+pub fn dim(dst: &mut Gray4ImgMut, src: &Gray4Img, level: u8, scratch_row: &mut [u8]) {
+    debug_assert_eq!(dst.w, src.w);
+    debug_assert_eq!(dst.h, src.h);
+    debug_assert!(scratch_row.len() >= src.w);
+
+    let w = dst.w;
+    let h = dst.h;
+
+    for y in 0..h {
+        let srow = src.row(y);
+        let drow = dst.row_mut(y);
+
+        gray4::unpack_row_4_to_nibbles(srow, scratch_row, w);
+
+        for px in &mut scratch_row[..w] {
+            let v = (*px & 0x0F) as usize;
+            *px = MUL4[level as usize][v];
+        }
+
+        gray4::pack_row_nibbles_to_4(&scratch_row[..w], drow, w)
+    }
+}
+
 pub fn fill_bottom_to_top(
     dst: &mut Gray4ImgMut,
     src: &Gray4Img,

@@ -1,13 +1,19 @@
+use core::sync::atomic::Ordering;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::spi;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::signal::Signal;
 use embassy_time::Delay;
+use embedded_graphics::pixelcolor::Gray4;
+use embedded_graphics::prelude::GrayColor;
+use embedded_graphics::prelude::*;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use ssd1322_rs::{self, calculate_buffer_size, Frame, Orientation, SSD1322};
 use static_cell::StaticCell;
 
-use super::ScreenResources;
+use crate::deej_usb;
+use crate::graphics::{get_screen_state, ScreenState, SCREEN_STATE};
+use crate::ScreenResources;
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 64;
@@ -61,13 +67,76 @@ pub async fn render_task(screen: ScreenResources) {
 
     let mut frame = READY_FRAME.wait().await;
 
+    let rx = deej_usb::HOST_STATE_CH.receiver();
+    let mut host_state = deej_usb::HostState::Active; // assume we start active
+
+    // loop {
+    //     while let Ok(new_state) = rx.try_receive() {
+    //         host_state = new_state;
+    //     }
+
+    //     if host_state == deej_usb::HostState::Suspended {
+    //         frame.clear(Gray4::BLACK).unwrap();
+    //         let _ = display.flush_frame(frame).await;
+
+    //         loop {
+    //             let new_state = rx.receive().await;
+    //             host_state = new_state;
+    //             if host_state == deej_usb::HostState::Active {
+    //                 break;
+    //             }
+    //         }
+    //     }
+
+    //     NEXT_FRAME.signal(frame);
+    //     frame = READY_FRAME.wait().await;
+
+    //     match display.flush_frame(frame).await {
+    //         Ok(_) => {}
+    //         Err(_e) => {}
+    //     }
+    // }
+
     loop {
+        // 1) Pull in any pending USB state changes
+        while let Ok(new_state) = rx.try_receive() {
+            // If we *just* got Suspended, trigger outro once
+            if new_state == deej_usb::HostState::Suspended {
+                let current = get_screen_state();
+                if current != ScreenState::OUTRO && current != ScreenState::OFF {
+                    SCREEN_STATE.store(ScreenState::OUTRO as u8, Ordering::Relaxed);
+                }
+            }
+
+            host_state = new_state;
+        }
+
+        // 2) If host is suspended *and* outro has finished (OFF),
+        //    go black and sleep until Active again.
+        if host_state == deej_usb::HostState::Suspended && get_screen_state() == ScreenState::OFF {
+            frame.clear(Gray4::BLACK).unwrap();
+            let _ = display.flush_frame(frame).await;
+
+            // Wait here until host wakes up
+            loop {
+                let new_state = rx.receive().await;
+                host_state = new_state;
+
+                if host_state == deej_usb::HostState::Active {
+                    // Optionally restart intro on wake
+                    SCREEN_STATE.store(ScreenState::INTRO as u8, Ordering::Relaxed);
+                    break;
+                }
+            }
+
+            // Go back to top of loop after wake
+            continue;
+        }
+
+        // 3) Normal frame exchange, regardless of host_state or screen_state
         NEXT_FRAME.signal(frame);
         frame = READY_FRAME.wait().await;
 
-        match display.flush_frame(frame).await {
-            Ok(_) => (),
-            Err(_e) => (),
-        }
+        let _ = display.flush_frame(frame).await;
     }
 }

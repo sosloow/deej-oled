@@ -1,12 +1,10 @@
 use adc_mcp3008::{self, Channels8, Mcp3008};
-use core::fmt::Write as _;
-use core::sync::atomic::{AtomicI8, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicI8, AtomicU32, Ordering};
 use embassy_rp::{gpio, peripherals, spi};
 use embassy_time::Timer;
 use embassy_time::{Duration, Instant};
-use heapless::String;
 
-use crate::AdcResources;
+use crate::{deej_usb, AdcResources};
 
 #[derive(Clone, Copy)]
 pub struct AdcChanCfg {
@@ -33,8 +31,8 @@ pub const ADC_CHANNELS: [AdcChanCfg; 5] = [
     AdcChanCfg {
         invert: true,
         min: 0,
-        max: 850,
-        chan: Channels8::CH1,
+        max: 1023,
+        chan: Channels8::CH0,
         target: AdcTarget::System,
     },
     AdcChanCfg {
@@ -77,6 +75,8 @@ pub static ADC_VALUES: [AtomicU32; 5] = [
     AtomicU32::new(0),
     AtomicU32::new(0),
 ];
+
+pub static ADC_FORCE_PUSH: AtomicBool = AtomicBool::new(false);
 
 pub struct AdcMcp<'d> {
     adc: Mcp3008<spi::Spi<'d, peripherals::SPI0, spi::Async>, gpio::Output<'d>>,
@@ -151,15 +151,9 @@ pub async fn adc_task(adc: AdcResources) {
             set_active_channel(None);
         }
 
-        if any_updated {
-            let mut out: String<96> = String::new();
-            for (i, v) in snapshot.iter().enumerate() {
-                if i > 0 {
-                    let _ = out.push('|');
-                }
-                let _ = write!(out, "{}", v);
-            }
-            log::info!("{}", out.as_str());
+        if any_updated || ADC_FORCE_PUSH.load(Ordering::Relaxed) {
+            deej_usb::write_adc_values(snapshot);
+            ADC_FORCE_PUSH.store(false, Ordering::Relaxed);
         }
 
         Timer::after_millis(200).await;

@@ -4,12 +4,13 @@
 use assign_resources::assign_resources;
 use embassy_executor::Spawner;
 use embassy_rp::peripherals::USB;
-use embassy_rp::usb::{Driver, InterruptHandler};
+use embassy_rp::usb::InterruptHandler;
 use embassy_rp::Peri;
 use embassy_rp::{bind_interrupts, peripherals};
 use {defmt_rtt as _, panic_probe as _};
 
 mod adc;
+mod deej_usb;
 mod graphics;
 mod gray4;
 mod gray4_effects;
@@ -38,16 +39,14 @@ assign_resources! {
         dma_tx: DMA_CH1,
         dma_rx: DMA_CH2,
     },
+    usb: UsbResources {
+        usb: USB
+    }
 }
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
 });
-
-#[embassy_executor::task]
-async fn logger_task(driver: Driver<'static, USB>) {
-    embassy_usb_logger::run!(1024, log::LevelFilter::Info, driver);
-}
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -55,8 +54,10 @@ async fn main(spawner: Spawner) {
 
     let r = split_resources!(p);
 
-    let driver = Driver::new(p.USB, Irqs);
-    spawner.spawn(logger_task(driver).unwrap());
+    let (usb_dev, log_class) = deej_usb::init(r.usb);
+
+    spawner.spawn(deej_usb::usb_task(usb_dev).unwrap());
+    spawner.spawn(deej_usb::logger_task(log_class).unwrap());
 
     spawner.spawn(adc::adc_task(r.adc).unwrap());
 

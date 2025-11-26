@@ -6,11 +6,11 @@ use crate::adc::AdcTarget;
 use crate::gray4::{self, Gray4Img, Gray4ImgMut};
 use crate::gray4_effects::{fill_bottom_to_top, FillParams};
 
+static VOLUME_ICON_SYSTEM: &[u8] = include_bytes!("sprites/logos/system-62.gray4");
 static VOLUME_ICON_MIC: &[u8] = include_bytes!("sprites/logos/mic-62.gray4");
 static VOLUME_ICON_STEAM: &[u8] = include_bytes!("sprites/logos/steam-62.gray4");
 static VOLUME_ICON_DISCORD: &[u8] = include_bytes!("sprites/logos/discord-62.gray4");
 static VOLUME_ICON_BROWSER: &[u8] = include_bytes!("sprites/logos/browser-62.gray4");
-// static VOLUME_ICON_SPOTIFY: &[u8] = include_bytes!("sprites/logos/spotify-62.gray4");
 
 const W: usize = 62;
 const H: usize = 62;
@@ -36,12 +36,11 @@ impl VolumeIndicator {
         D: DrawTarget<Color = Gray4>,
     {
         let volume_icon = match adc_target {
-            AdcTarget::System => VOLUME_ICON_MIC,
+            AdcTarget::System => VOLUME_ICON_SYSTEM,
             AdcTarget::Mic => VOLUME_ICON_MIC,
             AdcTarget::Browser => VOLUME_ICON_BROWSER,
             AdcTarget::Steam => VOLUME_ICON_STEAM,
             AdcTarget::Discord => VOLUME_ICON_DISCORD,
-            // AdcTarget::Spotify => VOLUME_ICON_SPOTIFY,
         };
 
         let mut dst = Gray4ImgMut {
